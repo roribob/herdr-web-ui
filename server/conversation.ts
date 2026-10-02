@@ -1,7 +1,9 @@
 /**
  * Agent session transcripts -> structured conversation turns.
  *
- * The recognized stores are provider-native and read-only:
+ * The recognized sources are provider-native and read-only:
+ * - OpenCode V2: exact Herdr-reported session id, read through the local shared
+ *   service's authenticated API (opencode.ts), never inferred from cwd.
  * - Codex: native rollout JSONL, resolved by session metadata/open descriptors
  *   or a unique pane-text match for shared app-server TUIs (codex.ts).
  * - Claude Code: herdr's agent.get names the session id, the transcript lives
@@ -41,6 +43,7 @@ import { isOmoProcess, omoTranscriptForPane } from "./omo.ts";
 import { piTranscriptPath } from "./pi.ts";
 import { piAbandonedTurns, piBranchSegments } from "./pi-tree.ts";
 import { trimOutput } from "./tool-output.ts";
+import { opencodeConversation, opencodeToolOutput, type OpencodeConversation } from "./opencode.ts";
 import { parseConversationMetadata } from "./conversation-metadata.ts";
 
 import { invokedSkill } from "./skill-activity.ts";
@@ -783,10 +786,16 @@ async function resolveTranscript(pane: HerdrPane, cwd: string, codexHome?: strin
  * returned cursor; `from` is every turn after one, for a chat that already
  * shows the pages before it. A cursor from another file throws HistoryChanged.
  */
-export async function paneConversation(paneId: string, codexHome?: string, page: ConversationPage = {}): Promise<RecognizedConversation> {
+export async function paneConversation(paneId: string, codexHome?: string, page: ConversationPage = {}): Promise<RecognizedConversation | OpencodeConversation> {
   const snapshot = await sessionSnapshot();
   const pane = snapshot.panes.find((candidate) => candidate.pane_id === paneId);
   if (pane === undefined) throw new ConversationUnavailable("pane_not_found");
+  if (pane.agent === "opencode" || pane.agent_session?.agent === "opencode") {
+    if (page.before !== undefined || page.from !== undefined || page.since !== undefined) throw new HistoryChanged();
+    const conversation = await opencodeConversation(pane);
+    if (!conversation) throw new ConversationUnavailable("opencode_session_unavailable");
+    return conversation;
+  }
   if (typeof pane.cwd !== "string" || pane.cwd.length === 0) throw new ConversationUnavailable("no_recognized_transcript");
 
   const { source, path } = await resolveTranscript(pane, pane.cwd, codexHome, snapshot.panes);
@@ -929,6 +938,7 @@ export async function toolOutput(paneId: string, ref: string, codexHome?: string
   if (!TOOL_REF.test(ref)) return null;
   const snapshot = await sessionSnapshot();
   const pane = snapshot.panes.find((candidate) => candidate.pane_id === paneId);
+  if (pane && (pane.agent === "opencode" || pane.agent_session?.agent === "opencode")) return opencodeToolOutput(pane, ref);
   if (pane === undefined || typeof pane.cwd !== "string" || pane.cwd.length === 0) return null;
   let resolved: { source: RecognizedConversation["source"]; path: string };
   try { resolved = await resolveTranscript(pane, pane.cwd, codexHome, snapshot.panes); }

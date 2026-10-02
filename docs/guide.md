@@ -126,7 +126,7 @@ The installer's herdr, Bun and Node stay, since other tools may use them: `~/.lo
 
 ## Supported agents
 
-Every agent herdr runs shows up with its live status, terminal and alerts. The chat view reads the agent's own session files wherever it knows where they are:
+Every agent herdr runs shows up with its live status, terminal and alerts. The chat view reads native session files or APIs wherever it can bind the pane to an exact session:
 
 | Agent | Chat | Answer prompts from chat |
 | --- | --- | --- |
@@ -136,6 +136,7 @@ Every agent herdr runs shows up with its live status, terminal and alerts. The c
 | **omo** | Native session file, found through the pane's process tree | — use Terminal |
 | **gjc** | Native session file, from the session directory gjc keeps open | — use Terminal |
 | **pi** | Native session file, resolved through herdr; after `/tree`, the branch in play | ✓ its dialogs: a question, a confirmation, an answer typed in |
+| **OpenCode V2** | [Shared-service API](opencode-v2.md), exact Herdr-reported session ID; newest 200 messages | — use Terminal |
 | **Anything else** | The terminal's text | — use Terminal |
 
 When the last visible line is a familiar password, SSH passphrase or PIN request, both

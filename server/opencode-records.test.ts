@@ -30,4 +30,16 @@ describe("OpenCode V2 message projection", () => {
   it("does not equate model variants with reasoning effort", () => {
     expect(opencodeMetadata({ providerID: "openai", id: "gpt-6", variant: "fast" })).toEqual({ model: "openai/gpt-6", reasoning_effort: null });
   });
+
+  it("preserves streaming input without inventing parsed arguments", () => {
+    const message: SessionMessageInfo = { ...assistant, content: [{ type: "tool", id: "call_stream", name: "shell", time: { created: 2000 }, state: { status: "streaming", input: '{"command":' } }] };
+    expect(parseOpencodeMessages([message])[0]?.parts[0]).toMatchObject({ kind: "tool", input: '{"command":', output: "" });
+  });
+
+  it("shows failed tool results and keeps repeated user prompts", () => {
+    const message: SessionMessageInfo = { ...assistant, content: [{ type: "tool", id: "call_error", name: "shell", time: { created: 2000 }, state: { status: "error", input: {}, error: { type: "shell", message: "command failed" } } }] };
+    const turns = parseOpencodeMessages([user, message, user]);
+    expect(turns.map((turn) => turn.role)).toEqual(["user", "assistant", "user"]);
+    expect(turns[1]?.parts[0]).toMatchObject({ kind: "tool", error: true, output: "command failed" });
+  });
 });
